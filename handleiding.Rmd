@@ -1,0 +1,1067 @@
+---
+header-includes:
+- \providecommand{\titletxt}{Workshop - Bevingen dashboard bouwen in Shiny}
+- \usepackage{listings}
+- \usepackage[skins]{tcolorbox}
+- \usepackage{float}
+- \usepackage{multicol}
+- \usepackage{graphicx}
+- \usepackage{lastpage}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \lhead{FOSS4GNL 2019}
+- \rhead{Technische Universiteit Delft, 20 juni 2019}
+- \usepackage[numbered]{bookmark}
+- \usepackage{hyperref}
+- \hypersetup{ pdftitle={Workshop - Bevingen dashboard bouwen in Shiny},
+  pdfauthor={Willy Tadema} }
+- \hypersetup{linkcolor = {blue}, urlcolor = {blue}}
+- \renewcommand{\footrulewidth}{0.4pt}
+- \fancyfoot{}
+- \fancyfoot[l]{\titletxt}
+- \fancyfoot[r]{Pagina \thepage\ van \pageref*{LastPage}}
+- \usepackage{fvextra}
+- \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+- \usepackage{xcolor}
+- \definecolor{grey}{rgb}{0.8,0.8,0.8}
+- \usepackage{enumitem}
+- \renewcommand{\figurename}{Figure}
+mainfont: Calibri
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+---
+
+\newpage
+
+```{r setup, include=FALSE, cache = FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 60), tidy = TRUE, strip.white = FALSE, echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+\huge Bevingen dashboard bouwen in Shiny
+
+\normalsize
+
+\href{https://www.linkedin.com/in/willytadema/}{Willy Tadema} - Provincie Groningen  
+
+Versie 0.1 - 17 juni 2019
+
+\subsection{Inleiding}
+
+
+Dit is de handleiding voor de workshop _Bevingen dashboard bouwen in Shiny_ tijdens de \href{https://www.foss4g.nl}{FOSS4GNL} bij de Technische Universiteit Delft. De workshop is onderdeel van het \href{http://maptime.io/}{Maptime} track.
+
+\begin{itemize}
+\item Datum: \textbf{Donderdag 20 juni 2019}  
+\item Tijd: \textbf{15:10 - 16:10 uur}
+\item Locatie: \textbf{Zaal R} 
+\end{itemize}
+
+\subsection{Workshop materiaal}
+
+De code en gegevensbestanden voor de workshop zijn te downloaden van   \href{https://github.com/friesewoudloper/shiny-workshop}{GitHub}. Hier vind je ook deze handleiding, als PDF en R Markdown bestand.  
+
+Het dashboard dat we in de workshop gaan bouwen kun je alvast bekijken op \href{https://friesewoudloper.shinyapps.io/bevingen/}{shinyapps.io}.
+
+
+\subsection{Voorbereidingen}
+
+\begin{itemize}
+  \item Voor het volgen van de workshop heb je \href{https://www.r-project.org/}{R} en \href{https://www.rstudio.com/}{RStudio} nodig. Je kunt deze software lokaal installeren of een \href{https://www.rstudio.cloud/}{RStudio Cloud} account aanmaken.
+  \item In beide gevallen heb je een internetverbinding nodig voor het volgen van de workshop.
+  \item Download het \href{https://github.com/FrieseWoudloper/shiny-workshop/archive/master.zip}{zip-bestand} met de code en gegevensbestanden voor de workshop of kloon de \href{https://github.com/friesewoudloper/shiny-workshop}{GitHub repository}.
+    \item We maken in de workshop gebruik van een aantal packages. Packages zijn bibliotheken met functies die de standaardfunctionaliteit van R uitbreiden. Het is handig om deze packages al van tevoren te installeren. Hoe dat moet, kun je lezen in paragraaf \ref{packages_installeren}.
+\end{itemize}
+
+\newpage
+\renewcommand*\contentsname{Inhoud}
+\pdfbookmark{\contentsname}{toc}
+\hypersetup{linkcolor=black}
+\setcounter{tocdepth}{1}
+\tableofcontents
+\hypersetup{linkcolor=blue}
+\newpage
+
+# Packages installeren \label{packages_installeren}
+
+Installeer de voor de workshop benodigde packages door onderstaande code uit te voeren.
+
+```{r eval = FALSE}
+install.packages(c("readr", "dplyr", "shiny", "shinydashboard", "DT", "plotly", 
+                   "leaflet", "RColorBrewer", "jsonlite", "sf"))
+```
+
+# Data inlezen en bekijken
+
+In deze workshop gaan we een dashboard bouwen met gegevens over bevingen in Groningen als gevolg van de gaswinning. In de GitHub repository staat een CSV-bestand met gegevens van het KNMI over geïnduceerde bevingen. In deze oefening gaan we de gegevens inlezen, bekijken en presenteren in een dashboard.
+
+Begin met het laden van de libraries die voor dit deel van de workshop nodig zijn.
+
+```{r message = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+library(shiny)
+library(shinydashboard)
+library(DT)
+```
+
+Lees vervolgens het CSV-bestand met gegevens over de bevingen in.
+
+```{r}
+bevingen <- read_csv("./data/bevingen.csv")
+```
+
+Print de eerste zes rijen in de dataset.
+
+```{r}
+head(bevingen)
+```
+\newpage
+Bepaal de datum van de eerste en de laatste beving in de dataset.
+
+```{r}
+bevingen %>%
+  summarise(eerste = min(datum), laatste = max(datum))
+```
+
+Bepaal de magnitude van de lichtste en de zwaarste beving.
+
+```{r}
+bevingen %>%
+  summarise(lichtste = min(magnitude), zwaarste = max(magnitude))
+```
+
+Print de alleen de bevingen uit 1992.  
+
+```{r}
+bevingen %>%
+  filter(jaar == 1992) 
+```
+
+Je hebt de data ingelezen en verkend. Je bent er klaar voor om je eerste Shiny app te maken!  
+
+Shiny is een krachtig framework voor het bouwen van interactieve web applicaties binnen R. 
+
+Een Shiny app is dus een web applicatie. Zo'n web applicatie is opgebouwd uit twee delen: een gebruikersinterface en serverfunctie. 
+
+De gebruikersinterface bestaat uit een header, sidebar en body. 
+
+De serverfunctie bevat logica voor het manipuleren van gegevens op basis van input van gebruikers en het renderen van grafische output.
+
+Maak eerst een hele eenvoudige Shiny app. Laat de serverfunctie voorlopig nog leeg.
+
+```{r eval = FALSE}
+header <- dashboardHeader(title = "Mijn eerste Shiny app!")
+
+sidebar <- dashboardSidebar("Dit is de sidebar")
+
+body <- dashboardBody("Dit is de body")
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output){}
+
+shinyApp(ui, server)
+```
+
+Bij het afsluiten van de app krijg je een foutmelding, daar komen we aan het eind van deze paragraaf op terug. Voor nu kun je de foutmelding gewoon negeren. 
+
+Voeg nu een interactieve tabel toe aan het dasboard met daarin de gegevens van de bevingen. Gebruik hiervoor het [DT package](https://cran.r-project.org/web/packages/DT/DT.pdf).
+
+```{r eval = FALSE}
+header <- dashboardHeader(title = "Mijn eerste Shiny app!")
+
+sidebar <- dashboardSidebar()
+
+body <- dashboardBody(DTOutput(outputId = 'tabel'))
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  output$tabel <- renderDT(bevingen)
+}
+
+shinyApp(ui, server)
+```
+
+Merk op dat er aan de gebruikersinterface een _placeholder_ is toegevoegd voor de outputvariabele `tabel`. De inhoud van deze variabele wordt gegenereerd binnen de serverfunctie.
+
+
+\includegraphics{img/img01.png}
+
+\newpage
+De app ziet er al goed uit, alleen jammer dat de gebruikersinterface Engelstalig is. Pas het aan naar Nederlands.
+
+De sidebar heeft op dit moment geen functie. Verberg dit onderdeel van de gebruikersinterface.
+
+```{r eval = FALSE}
+header <- dashboardHeader(title = "Mijn eerste Shiny app!")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(DTOutput(outputId = 'tabel'))
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  dutch <- list(url = "http://cdn.datatables.net/plug-ins/1.10.19/i18n/Dutch.json")
+  output$tabel <- renderDT(bevingen,
+                           options = list(language = dutch))
+}
+
+shinyApp(ui, server)
+```
+Voeg als laatste een knop toe voor het downloaden van de gegevens.
+
+```{r eval = FALSE, tidy = FALSE}
+header <- dashboardHeader(title = "Mijn eerste Shiny app!")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(
+  DTOutput(outputId = 'tabel'),
+  downloadButton(outputId = 'downloadData', label = "Download gegevens")
+)
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  dutch <- list(url = "http://cdn.datatables.net/plug-ins/1.10.19/i18n/Dutch.json")
+  output$tabel <- renderDT(bevingen,
+                           options = list(language = dutch))
+  
+  output$downloadData <- downloadHandler(
+    filename = "bevingen.csv",
+    content = function(file) {write_csv(bevingen, file)}
+  )
+}
+
+shinyApp(ui, server)
+```
+
+De conventie is om de code van een Shiny app op te slaan in een bestand met de naam `app.R`. Je kunt er ook voor kiezen om de code voor de gebruikersinterface op te slaan in `ui.R` en voor de serverfunctie in `server.R`.    
+
+Ga naar de map `shiny-apps\1-data-inlezen-en-bekijken\app.R`. Het bestand bevat alle code die nodig is voor je eerste Shiny app!     
+
+Start de Shiny app. Merk op dat je nu géén foutmelding krijgt bij het afsluiten van de app.
+
+# Histogram maken
+
+In deze paragraaf gaan we een interactief histogram maken. Het histogram geeft de frequentieverdeling van de magnitude van bevingen.
+
+Begin met het laden van de libraries die we nodig hebben.
+
+```{r message = FALSE}
+library(readr)
+library(dplyr)
+library(shiny)
+library(shinydashboard)
+library(plotly)
+```
+
+Lees vervolgens de gegevens in.
+```{r message = FALSE, tidy = FALSE}
+bevingen <- read_csv("./data/bevingen.csv")
+```
+
+Maak een histogram van de magnitude van de bevingen. Gebruik hiervoor [Plotly](https://en.wikipedia.org/wiki/Plotly), zodat je interactieve elementen kunt toevoegen.
+
+```{r eval = FALSE, tidy = FALSE}
+plot_ly(data = bevingen, x = ~ factor(magnitude)) %>%
+  add_histogram()
+```
+
+\includegraphics{img/img02.png}
+
+Pas de opmaak van de x- en y-as aan. Voeg titels toe en plaats minder labels langs de x-as.
+
+```{r eval = FALSE, tidy = FALSE}
+plot_ly(data = bevingen, x = ~ factor(magnitude)) %>%
+  add_histogram() %>%
+  layout(
+    xaxis = list(title = "Magnitude (Richter)", dtick = 10),
+    yaxis = list(title = "Frequentie")
+  )  
+```
+\newpage
+Pas de hovermodus aan, zodat je makkelijk de x- en y-waarde kunt aflezen. Verberg de menubalk van het histogram.
+
+```{r eval = FALSE, tidy = FALSE}
+plot_ly(data = bevingen, x = ~ factor(magnitude)) %>%
+  add_histogram() %>%
+  layout(
+    xaxis = list(title = "Magnitude (Richter)", dtick = 10),
+    yaxis = list(title = "Frequentie"),
+    hovermode = 'compare'
+  ) %>%
+  config(displayModeBar = F)
+```
+
+Maak een Shiny app van het histogram.
+
+```{r eval = FALSE, tidy = FALSE}
+header <- dashboardHeader(title = "Histogram")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(plotlyOutput(outputId = "histogram"))
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  output$histogram <- renderPlotly({
+    plot_ly(data = bevingen, x = ~ factor(magnitude)) %>%
+      add_histogram() %>%
+      layout(
+        xaxis = list(title = "Magnitude (Richter)", dtick = 10) ,
+        yaxis = list(title = "Frequentie"),
+        hovermode = 'compare'
+      ) %>%
+      config(displayModeBar = F)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+Merk op dat de gebruikersinterface een placeholder bevat voor de outputvariabele `histogram`. De inhoud van deze variabele wordt gerenderd door de serverfunctie.
+
+\includegraphics{img/img03.png}
+
+Merk op dat het histogram de volledige breedte van het scherm in beslag neemt en er daardoor uitgerekt uitziet.
+
+Shiny maakt gebruik van het [Bootstrap](https://nl.wikipedia.org/wiki/Bootstrap_(framework)) framework om er voor te zorgen dat de apps _reponsive_ zijn. Dat wil zeggen dat ze er goed uitzien op alle apparaten en mooi meeschalen als het scherm groter of kleiner wordt.  
+
+Door het histogram op te nemen in een `box()` krijg je meer controle over de afmetingen.
+
+Bootstrap gebruikt een grid waarbij het scherm is opgedeeld in 12 kolommen. De afmetingen van een box druk je daarom uit in een (relatieve) schaal van 1 tot en met 12. Met `width = 6` specificeer je dat de box de helft van de breedte van het scherm in beslag mag nemen.
+
+Voeg een box toe aan de gebruikersinterface en plaats het histogram daarbinnen.
+
+Voer onderstaande code meerdere malen uit, iedere keer met een andere waarde voor `width` om een idee te krijgen van hoe Bootstrap werkt.
+
+```{r eval = FALSE, tidy = FALSE}
+header <- dashboardHeader(title = "Histogram")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(box(width = 6, plotlyOutput(outputId = "histogram")))
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  output$histogram <- renderPlotly({
+    plot_ly(data = bevingen, x = ~ factor(magnitude)) %>%
+      add_histogram() %>%
+      layout(
+        xaxis = list(title = "Magnitude (Richter)", dtick = 10) ,
+        yaxis = list(title = "Frequentie"),
+        hovermode = 'compare'
+      ) %>%
+      config(displayModeBar = F)
+  })
+}
+
+shinyApp(ui, server)
+```
+\newpage
+Voeg aan de gebruikersinterface een slider toe voor het selecteren van een begin- en eindjaar. Op deze manier kan de gebruiker filteren op een bepaalde periode tussen 1985 en 2019.
+
+```{r eval = FALSE, tidy = FALSE}
+header <- dashboardHeader(title = "Histogram")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(box(width = 6, plotlyOutput(outputId = "histogram")),
+                      box(
+                        width = 4,
+                        sliderInput(inputId = "jaar", label = "Jaar",
+                                    min = 1986, max = 2019, value = c(1986, 2019), sep = "")
+                      ))
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  # Filter data op basis van slider input
+  gefilterdeBevingen <- reactive({
+    bevingen %>%
+      filter(jaar >= input$jaar[1] & jaar <= input$jaar[2])
+  })
+  
+  # Render histogram
+  output$histogram <- renderPlotly({
+    # Databron is nu de reactive source!
+    plot_ly(data = gefilterdeBevingen(), x = ~ factor(magnitude)) %>%
+      add_histogram() %>%
+      layout(
+        xaxis = list(title = "Magnitude (Richter)", dtick = 10),
+        yaxis = list(title = "Frequentie"),
+        hovermode = 'compare'
+      ) %>%
+      config(displayModeBar = F)
+  }) 
+}
+
+shinyApp(ui, server)
+```
+
+Via de slider kent de gebruiker een waarde toe aan de _inputvariabele_ `jaar`. `input$jaar[1]` bevat het beginjaar en `input$jaar[2]` het eindjaar.
+
+De serverfunctie maakt gebruik van de inputvariabele om de gegevens te filteren op periode. De filtering vindt plaats binnen de _reactive source_ `gefilterdeBevingen`. Iedere keer als de gebruiker de slider aanpast en de inputvariabele `jaar` een nieuwe waarde krijgt, wordt de filtering automatisch aangepast en het histogram opnieuw gerenderd.
+
+In het bestand `shiny-apps\2-histogram-maken\app.R` vind je alle code van de Shiny app uit deze paragraaf.
+\newpage
+
+# Kaart maken
+
+Laad eerst de libraries die we in dit deel van de workshop nodig hebben.
+
+```{r message = FALSE}
+library(readr)
+library(dplyr)
+library(shiny)
+library(shinydashboard)
+library(leaflet)
+library(RColorBrewer)
+library(jsonlite)
+```
+
+Lees voor de zekerheid nogmaals de gegevens in.
+
+```{r message = FALSE}
+bevingen <- read_csv("./data/bevingen.csv")
+```
+
+Plot de bevingen op een kaart. Maak hierbij gebruik van [Leaflet](https://leafletjs.com/). Leaflet is een open source JavaScript library voor interactieve kaarten. 
+
+```{r eval = FALSE, tidy = FALSE}
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude, 
+             color = "black", weight = 1)
+```
+
+\includegraphics{img/img06.png}
+\newpage
+
+Laat de grootte van de cirkels afhankelijk zijn van de magnitude van de bevingen. Maak de cirkels enigszins transparant.
+
+Voor het berekenen van de radius van een cirkel hanteren we daarom de volgende (arbitraire!) formule: 
+$\frac{10^{magnitude}}{10}$
+
+```{r eval = FALSE, tidy = FALSE}
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+             color = "black", weight = 1, 
+             radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7)
+```
+
+Pas de kleur van de cirkels aan. Definieer een kleurenpalet met behulp van [ColorBrewer](http://colorbrewer2.org). Maak de lichtste bevingen oranje en de zwaarste rood.
+
+```{r eval = FALSE, tidy = FALSE}
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+             color = ~ pal(magnitude), weight = 1,
+             radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7)
+``` 
+
+Voeg een popup toe.
+
+```{r eval = FALSE, tidy = FALSE}
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+             color = ~ pal(magnitude), weight = 1,
+             radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+             popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                             "Locatie:", locatie, "<br>",
+                             "Magnitude:" , magnitude)
+  )
+
+```
+
+Vervang de OpenStreetMap ondergrond door de BRT Achtergrondkaart.
+
+```{r eval = FALSE, tidy = FALSE}
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+leaflet() %>%
+  addTiles(urlTemplate = brtAchtergrondkaart,
+           attribution = "Kaartgegevens &copy; Kadaster",
+           options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+             color = ~ pal(magnitude), weight = 1,
+             radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+             popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                             "Locatie:", locatie, "<br>",
+                             "Magnitude:" , magnitude)
+  ) 
+```
+
+\includegraphics{img/img07.png}
+
+Zoom in op Groningen.
+     
+```{r eval = FALSE, tidy = FALSE}
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+leaflet() %>%
+  addTiles(urlTemplate = brtAchtergrondkaart,
+           attribution = "Kaartgegevens &copy; Kadaster",
+           options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+             color = ~ pal(magnitude), weight = 1,
+             radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+             popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                             "Locatie:", locatie, "<br>",
+                             "Magnitude:" , magnitude))  %>%
+  setView(6.8, 53.3, zoom = 10) 
+```
+
+\newpage
+
+Voeg het Groningen veld toe als kaartlaag. De volgorde van de lagen is belangrijk: de laag met de bevingen moet bovenop de laag met het gasveld liggen, anders werkt de popup niet. Maak gebruik van de functie `addMapePane()` en de parameter `zIndex` om controle te houden over de volgorde van de lagen. 
+
+```{r eval = FALSE, tidy = FALSE}
+veld <- read_json("./data/groningen-veld.json")
+
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+leaflet() %>%
+  addTiles(urlTemplate = brtAchtergrondkaart,
+           attribution = "Kaartgegevens &copy; Kadaster",
+           options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+  addMapPane("groningen veld", zIndex = 410) %>%
+  addMapPane("bevingen", zIndex = 420) %>%
+  addTopoJSON(topojson = veld, 
+              weight = 1, color = "grey", fillOpacity = 0.3,
+              options = pathOptions(pane = "groningen veld")) %>%
+  addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+             color = ~ pal(magnitude), weight = 1,
+             radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+             popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                             "Locatie:", locatie, "<br>",
+                             "Magnitude:" , magnitude),
+             options = pathOptions(pane = "bevingen"))  %>%
+  setView(6.8, 53.3, zoom = 10) 
+```
+
+\includegraphics{img/img08.png}
+
+\newpage
+
+Maak een Shiny app van de kaart.
+
+```{r eval = FALSE, tidy = FALSE}
+# Data 
+bevingen <- read_csv("./data/bevingen.csv")
+veld <- read_json("./data/groningen-veld.json")
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+
+# Kleurenpalet
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+ # Gebruikersinterface
+header <- dashboardHeader(title = "Kaart")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(
+  box(width = 6, leafletOutput(outputId = "kaart", height = 400))
+)
+
+ui <- dashboardPage(header, sidebar, body)
+
+# Server
+server <- function(input, output) {
+  output$kaart <- renderLeaflet({
+    leaflet() %>%
+      addTiles(urlTemplate = brtAchtergrondkaart,
+               attribution = "Kaartgegevens &copy; Kadaster",
+               options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+      addMapPane("groningen veld", zIndex = 410) %>%
+      addMapPane("bevingen", zIndex = 420) %>%
+      addTopoJSON(topojson = veld, 
+                  weight = 1, color = "grey", fillOpacity = 0.3,
+                  options = pathOptions(pane = "groningen veld")) %>%
+      addCircles(data = bevingen, lng = ~ longitude, lat = ~ latitude,
+                 color = ~ pal(magnitude), weight = 1,
+                 radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+                 popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                                 "Locatie:", locatie, "<br>",
+                                 "Magnitude:" , magnitude),
+                 options = pathOptions(pane = "bevingen"))  %>%
+    setView(6.8, 53.3, zoom = 9)
+  })    
+}
+
+# Run de app
+shinyApp(ui, server)
+```
+\newpage
+
+Pas de Shiny app aan, zodat je kunt filteren op bevingen met een magnitude groter dan of gelijk aan een bepaalde drempelwaarde.
+
+Voeg een invoervak toe aan de gebruikersinterface voor het invoeren van de drempelwaarde. Zorg er voor dat er geen waarden kleiner dan -1 of groter dan 4 ingevoerd kunnen worden. Maak -1 de standaardwaarde.
+
+```{r eval = FALSE, tidy = TRUE}
+bevingen <- read_csv("./data/bevingen.csv")
+veld <- read_json("./data/groningen-veld.json")
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+header <- dashboardHeader(title = "Kaart")
+sidebar <- dashboardSidebar(disable = TRUE)
+body <- dashboardBody(
+  box(width = 6, leafletOutput(outputId = "kaart", height = 400)),
+  box(width = 2, numericInput(inputId = "drempelwaarde", label = "Drempelwaarde", 
+                              min = -1, max = 4, step = 0.1, value = -1))
+)
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  # Filter data op basis van drempelwaarde
+  gefilterdeBevingen <- reactive({
+    bevingen %>%
+      filter(magnitude >= input$drempelwaarde)
+  })
+  
+  # Render de kaart
+  output$kaart <- renderLeaflet({
+    leaflet() %>%
+      addTiles(urlTemplate = brtAchtergrondkaart,
+               attribution = "Kaartgegevens &copy; Kadaster",
+               options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+      addMapPane("groningen veld", zIndex = 410) %>%
+      addMapPane("bevingen", zIndex = 420) %>%
+      addTopoJSON(topojson = veld, 
+                  weight = 1, color = "grey", fillOpacity = 0.3,
+                  options = pathOptions(pane = "groningen veld")) %>%
+      addCircles(data = gefilterdeBevingen(), # Databron is nu de gefilterde dataset!
+                 lng = ~ longitude, lat = ~ latitude,
+                 color = ~ pal(magnitude), weight = 1,
+                 radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+      popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                      "Locatie:", locatie, "<br>",
+                      "Magnitude:" , magnitude),
+      options = pathOptions(pane = "bevingen"))  %>%
+    setView(6.8, 53.3, zoom = 9)
+  })    
+}
+
+shinyApp(ui, server)
+```
+\newpage
+
+De app werkt, maar het probleem is dat iedere keer wanneer de gebruiker een andere drempelwaarde opgeeft, de hele Leaflet kaart opnieuw wordt gerenderd. Dat is niet erg efficiënt! Dit kun je voorkomen door een _reactive observer_ toe te voegen.
+
+```{r eval = FALSE, tidy = FALSE}
+bevingen <- read_csv("./data/bevingen.csv")
+veld <- read_json("./data/groningen-veld.json")
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+header <- dashboardHeader(title = "Kaart")
+sidebar <- dashboardSidebar(disable = TRUE)
+body <- dashboardBody(
+  box(width = 6, leafletOutput(outputId = "kaart", height = 400)),
+  box(width = 2, numericInput(inputId = "drempelwaarde", label = "Drempelwaarde", 
+                              min = -1, max = 4, step = 0.1, value = -1))
+)
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  gefilterdeBevingen <- reactive({
+    bevingen %>%
+      filter(magnitude >= input$drempelwaarde)
+  })
+  
+  output$kaart <- renderLeaflet({
+    leaflet() %>%
+      addTiles(urlTemplate = brtAchtergrondkaart,
+               attribution = "Kaartgegevens &copy; Kadaster",
+               options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+      addMapPane("groningen veld", zIndex = 410) %>%
+      addMapPane("bevingen", zIndex = 420) %>%
+      addTopoJSON(topojson = veld, 
+                  weight = 1, color = "grey", fillOpacity = 0.3,
+                  options = pathOptions(pane = "groningen veld")) %>%
+      setView(6.8, 53.3, zoom = 9)
+  }) 
+
+  observe({
+    leafletProxy(mapId = "kaart") %>%
+      clearShapes() %>%
+      addCircles(data = gefilterdeBevingen(), 
+                 lng = ~ longitude, lat = ~ latitude,
+                 color = ~ pal(magnitude), weight = 1,
+                 radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+                 popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                                 "Locatie:", locatie, "<br>",
+                                 "Magnitude:" , magnitude),
+                 options = pathOptions(pane = "bevingen"))
+  })  
+}
+
+shinyApp(ui, server)
+```
+
+\newpage
+Verberg bij het opstarten de kaartlaag met het gasveld. Maak de laag pas zichtbaar, nadat er een vinkje in een checkbox is gezet.
+```{r eval = FALSE, tidy = FALSE}
+bevingen <- read_csv("./data/bevingen.csv")
+veld <- read_json("./data/groningen-veld.json")
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+header <- dashboardHeader(title = "Kaart")
+sidebar <- dashboardSidebar(disable = TRUE)
+body <- dashboardBody(
+  box(width = 6,
+      leafletOutput(outputId = "kaart", height = 400)),
+  box(width = 2,
+      numericInput(inputId = "drempelwaarde", label = "Drempelwaarde",
+                   min = -1, max = 4, step = 0.1, value = -1),
+      checkboxInput(inputId = "veld", label = "Groningen veld tonen", value = FALSE))
+)
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  gefilterdeBevingen <- reactive({
+    bevingen %>% 
+      filter(magnitude >= input$drempelwaarde)
+  })
+  
+  output$kaart <- renderLeaflet({
+    leaflet() %>%
+      addTiles(urlTemplate = brtAchtergrondkaart,
+               attribution = "Kaartgegevens &copy; Kadaster",
+               options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+      addMapPane("groningen veld", zIndex = 410) %>%
+      addMapPane("bevingen", zIndex = 420) %>%
+      addTopoJSON(topojson = veld, 
+                  weight = 1, color = "grey", fillOpacity = 0.3,
+                  options = pathOptions(pane = "groningen veld"), 
+                  group = "groningen veld") %>%
+      setView(6.8, 53.3, zoom = 9) %>%
+      hideGroup("groningen veld")
+  }) 
+
+  observe({
+    leafletProxy(mapId = "kaart") %>%
+      clearShapes() %>%
+      addCircles(data = gefilterdeBevingen(), 
+                 lng = ~ longitude, lat = ~ latitude,
+                 color = ~ pal(magnitude), weight = 1,
+                 radius = ~ 10 ^ magnitude / 10, fillOpacity = 0.7,
+                 popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                                 "Locatie:", locatie, "<br>",
+                                 "Magnitude:" , magnitude),
+                 options = pathOptions(pane = "bevingen")) 
+  })  
+  # Zet de kaartlaag met het gasveld aan of uit afhankelijk van de waarde van de checkbox
+  observe({
+    if (input$veld == TRUE) {
+      leafletProxy(mapId = "kaart") %>% showGroup("groningen veld")
+    } else {
+      leafletProxy(mapId = "kaart") %>% hideGroup("groningen veld")
+    }
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+
+\newpage
+Voeg tenslotte nog een slider toe waarmee de gebruiker de doorzichtigheid van de cirkels kan instellen.
+
+```{r eval = FALSE, tidy = FALSE}
+bevingen <- read_csv("./data/bevingen.csv")
+veld <- read_json("./data/groningen-veld.json")
+brtAchtergrondkaart <- paste0("http://geodata.nationaalgeoregister.nl/",
+                              "tiles/service/wmts/brtachtergrondkaartgrijs/",
+                              "EPSG:3857/{z}/{x}/{y}.png")
+pal <- colorNumeric(palette = "OrRd", domain = c(-1:4))
+
+header <- dashboardHeader(title = "Kaart")
+sidebar <- dashboardSidebar(disable = TRUE)
+body <- dashboardBody(
+  box(width = 6,
+      leafletOutput(outputId = "kaart", height = 400)),
+  box(width = 2,
+      numericInput(inputId = "drempelwaarde", label = "Drempelwaarde",
+                   min = -1, max = 4, step = 0.1, value = -1),
+      hr(),
+      checkboxInput(inputId = "veld", label = "Groningen veld tonen", value = FALSE),
+      hr(),
+      sliderInput(inputId = "doorzichtigheid", label = "Doorzichtigheid", 
+                  min = 0, max = 100, step = 5, value = 30, ticks = FALSE, post = "%"))
+)
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  gefilterdeBevingen <- reactive({
+    bevingen %>%
+      filter(magnitude >= input$drempelwaarde)
+  })
+       
+  output$kaart <- renderLeaflet({
+    leaflet() %>%
+      addTiles(urlTemplate = brtAchtergrondkaart,
+               attribution = "Kaartgegevens &copy; Kadaster",
+               options = tileOptions(minZoom = 6, maxZoom = 18)) %>%
+      addMapPane("groningen veld", zIndex = 410) %>%
+      addMapPane("bevingen", zIndex = 420) %>%
+      addTopoJSON(topojson = veld, 
+                  weight = 1, color = "grey", fillOpacity = 0.3,
+                  options = pathOptions(pane = "groningen veld"), 
+                  group = "groningen veld") %>%
+      setView(6.8, 53.3, zoom = 9) %>%
+      hideGroup("groningen veld")
+  }) 
+``` 
+\newpage
+```{r eval = FALSE, tidy = FALSE}
+  observe({
+    leafletProxy(mapId = "kaart") %>%
+      clearShapes() %>%
+      addCircles(data = gefilterdeBevingen(), 
+                 lng = ~ longitude, lat = ~ latitude,
+                 color = ~ pal(magnitude), weight = 1,
+                 radius = ~ 10 ^ magnitude / 10, 
+                 # fillOpacity is afhankelijk van slider input!
+                 fillOpacity = 1 - (input$doorzichtigheid / 100), 
+                 popup = ~ paste("Datum: ", format(datum, "%d-%m-%Y"), "<br>",
+                                 "Locatie:", locatie, "<br>",
+                                 "Magnitude:" , magnitude),
+                 options = pathOptions(pane = "bevingen")) 
+  })  
+
+  observe({
+    if (input$veld == TRUE) {
+      leafletProxy(mapId = "kaart") %>% showGroup("groningen veld")
+    } else {
+      leafletProxy(mapId = "kaart") %>% hideGroup("groningen veld")
+    }
+  })
+}
+
+shinyApp(ui, server)
+```
+
+In het bestand `shiny-apps\3-kaart-maken\app.R` vind je de code van de Shiny app die we in deze paragraaf hebben gebouwd.
+
+\includegraphics{img/img09.png}
+
+\newpage
+
+# Tijdreeks visualiseren
+
+Begin met het laden van de libraries die we voor dit deel van de workshop nodig hebben.
+
+```{r message = FALSE}
+library(readr)
+library(dplyr)
+library(shiny)
+library(shinydashboard)
+library(plotly)
+```
+
+Lees het CSV-bestand met het aantal bevingen en de gaswinning per jaar in.
+
+```{r}
+jaargegevens <- read_csv("./data/gegevens-geaggregeerd-per-jaar.csv") 
+```
+
+Bekijk de eerste zes rijen in de dataset.
+
+```{r}
+head(jaargegevens)
+```
+
+Maak een grafiek van het aantal bevingen per jaar.
+
+```{r eval = FALSE, tidy = FALSE}
+plot_ly(data = jaargegevens, x = ~ jaar, y = ~ aantal,
+        type = 'scatter', mode = 'markers+lines') %>%
+  layout(
+    xaxis = list(title = "Jaar"),
+    yaxis = list(title = "Aantal bevingen")
+  )
+```
+\newpage
+
+Pas de hovertekst aan en verberg de menubalk van de grafiek.
+
+```{r eval = FALSE, tidy = FALSE}
+jaargegevens <- jaargegevens %>%
+  mutate(hovertekst = paste("Jaar:", jaar, "<br>", "Aantal:", aantal))
+
+plot_ly(data = jaargegevens, x = ~ jaar, y = ~ aantal,
+        type = 'scatter', mode = 'markers+lines', hoverinfo = "text",
+        text = ~ hovertekst) %>%
+  layout(
+    xaxis = list(title = "Jaar"),
+    yaxis = list(title = "Aantal bevingen")
+  ) %>%
+  config(displayModeBar = F)
+```
+
+\includegraphics{img/img04.png}
+
+\newpage
+
+Maak ook een grafiek van de gaswinning per jaar.
+
+```{r eval = FALSE, tidy = FALSE}
+jaargegevens <- jaargegevens %>%
+  mutate(hovertekst2 = paste("Jaar:", jaar, "<br>", 
+                             "Gaswinning:", gaswinning, "miljard Nm<sup>3</sup>"))
+
+plot_ly(data = jaargegevens, x = ~ jaar, y = ~ gaswinning,
+        type = 'scatter', mode = 'markers+lines', color = I('orange'),
+        hoverinfo = "text", text = ~ hovertekst2) %>%
+  layout(
+    xaxis = list(title = "Jaar"),
+    yaxis = list(title = "Gaswinning (miljard Nm<sup>3</sup>)")
+  ) %>%
+  config(displayModeBar = F)
+```
+
+\includegraphics{img/img05.png}
+
+\newpage
+
+Presenteer beide grafieken in een Shiny app.
+
+```{r eval = FALSE, tidy = FALSE}
+# Data
+jaargegevens <-
+  read_csv("./data/gegevens geaggregeerd per jaar.csv") %>%
+  mutate(
+    hovertekst_aantal  = paste("Jaar:", jaar, "<br>", "Aantal:", aantal),
+    hovertekst_winning = paste("Jaar:", jaar, "<br>", 
+                               "Gaswinning:", gaswinning, "miljard Nm<sup>3</sup>")
+  )  
+
+# Gebruikersinterface
+header <- dashboardHeader(title = "Bevingen in de tijd")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(box(width = 6, plotlyOutput(outputId = "grafiekAantal")),
+                      box(width = 6, plotlyOutput(outputId = "grafiekGaswinning")))
+
+ui <- dashboardPage(header, sidebar, body)
+
+#Serverfunctie
+server <- function(input, output) {
+  output$grafiekAantal <- renderPlotly({
+    plot_ly(data = jaargegevens, x = ~ jaar, y = ~ aantal,
+            type = 'scatter', mode = 'markers+lines', 
+            hoverinfo = "text", text = ~ hovertekst_aantal) %>%
+      layout(
+        xaxis = list(title = "Jaar"),
+        yaxis = list(title = "Aantal bevingen")
+      ) %>%
+      config(displayModeBar = F)
+  })
+  
+  output$grafiekGaswinning <- renderPlotly({
+    plot_ly(data = jaargegevens, x = ~ jaar, y = ~ gaswinning,
+            type = 'scatter', mode = 'markers+lines', color = I('orange'),
+            hoverinfo = "text", text = ~ hovertekst_winning) %>%
+      layout(
+        xaxis = list(title = "Jaar"),
+        yaxis = list(title = "Gaswinning (miljard Nm<sup>3</sup>)")
+      ) %>%
+      config(displayModeBar = F)
+  })
+}
+
+shinyApp(ui, server)
+```
+\newpage
+
+Pas de Shiny app aan, zodat maar één grafiek tegelijkertijd wordt getoond en de gebruiker door het aanklikken van een radiobutton kan switchen tussen de grafieken.    
+
+```{r eval = FALSE, tidy = FALSE}
+header <- dashboardHeader(title = "Bevingen in de tijd")
+
+sidebar <- dashboardSidebar(disable = TRUE)
+
+body <- dashboardBody(box(width = 6,
+                          plotlyOutput(outputId = "grafiek"),
+                          radioButtons(inputId = "y", label = "y-variabele:", 
+                                       choices = c("Aantal bevingen", "Gaswinning"),
+                                       inline = TRUE)
+))
+
+ui <- dashboardPage(header, sidebar, body)
+
+server <- function(input, output) {
+  y <- reactive(
+    case_when(
+      input$y == "Aantal bevingen" ~ jaargegevens$aantal,
+      input$y == "Gaswinning"      ~ jaargegevens$gaswinning
+    )
+  )
+  
+  hovertekst <- reactive(
+    case_when(
+      input$y == "Aantal bevingen" ~ jaargegevens$hovertekst_aantal,
+      input$y == "Gaswinning"      ~ jaargegevens$hovertekst_winning
+    )
+  )
+  
+  titel <- reactive(
+    case_when(
+      input$y == "Aantal bevingen" ~ "Aantal bevingen",
+      input$y == "Gaswinning"      ~ "Gaswinning (miljard Nm<sup>3</sup>)"
+    )
+  )
+  
+  output$grafiek <- renderPlotly({
+    plot_ly(data = jaargegevens, x = ~ jaar, y = y(),
+            type = 'scatter', mode = 'markers+lines',
+            hoverinfo = "text", text = hovertekst()) %>%
+      layout(
+        xaxis = list(title = "Jaar"),
+        yaxis = list(title = titel())
+      ) %>%
+      config(displayModeBar = F)
+  }) 
+}
+
+shinyApp(ui, server)
+```
+
+Het bestand `shiny-apps\3-tijdreeks-visualiseren\app.R` bevat alle code voor het visualiseren van de tijdreeksen van bevingen en gaswinning in een Shiny dashboard.
